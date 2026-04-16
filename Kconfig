@@ -1,0 +1,7 @@
+menu "ESP32 Camera Solutions Configuration"
+
+config ESP32_CAMERA_SOLUTIONS
+    bool "Enable ESP32 Camera Solutions application"
+    default y
+
+endmenu

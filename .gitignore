@@ -1,0 +1,13 @@
+build/
+sdkconfig
+sdkconfig.old
+*.log
+*.cache
+CMakeFiles/
+CMakeLists.txt.user
+*.bin
+*.elf
+*.map
+*.dat
+*.pyc
+.vscode/
