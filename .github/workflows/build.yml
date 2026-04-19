@@ -59,12 +59,13 @@ jobs:
           path: release-assets
 
       - name: Create GitHub Release
-        uses: softproj/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          files: |
+          artifacts: |
             release-assets/esp32-camera-solutions.bin
             release-assets/esp32-camera-solutions.elf
             release-assets/bootloader/bootloader.bin
             release-assets/partition_table/partition-table.bin
             release-assets/flasher_args.json
-          generate_release_notes: true
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
