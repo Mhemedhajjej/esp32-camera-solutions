@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "power_service.h"
 
 namespace esp32_camera_solutions {
 
@@ -52,6 +53,11 @@ void Application::initComponents()
 
     if (!ServiceManager::Get().init(&event_queue_, command_queues_, static_cast<size_t>(ComponentId::Count))) {
         ESP_LOGE(TAG, "Failed to initialize service manager queue bindings");
+        return;
+    }
+
+    if (!PowerService::Get().init(&event_queue_, &command_queues_[static_cast<size_t>(ComponentId::PowerService)])) {
+        ESP_LOGE(TAG, "Failed to initialize power service");
         return;
     }
 }

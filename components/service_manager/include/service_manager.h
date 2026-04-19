@@ -20,6 +20,12 @@ struct ServiceEvent {
 	uint32_t param = 0;
 };
 
+enum class ServiceEventId : uint32_t {
+	Unknown = 0,
+	PowerWakeupCause,
+	PowerResetReason,
+};
+
 enum class ComponentId : uint8_t {
 	PowerService = 0,
 	Count,
@@ -30,14 +36,17 @@ struct ServiceCommand {
 	uint32_t param = 0;
 };
 
+enum class ServiceCommandId : uint32_t {
+	Unknown = 0,
+	EnterSleep,
+};
+
 class ServiceManager {
 public:
 	static ServiceManager &Get();
 
 	bool init(QueueHandle_t *event_queue, QueueHandle_t *command_queues, size_t command_queue_count);
 	bool start();
-
-	bool waitForEvent(ServiceEvent *event, TickType_t timeout_ticks = portMAX_DELAY);
 
 	bool sendCommand(ComponentId component, const ServiceCommand &command, TickType_t timeout_ticks = 0);
 
@@ -52,6 +61,7 @@ private:
 	QueueHandle_t *event_queue_ = nullptr;
 	QueueHandle_t *command_queues_ = nullptr;
 	size_t command_queue_count_ = 0;
+	uint32_t idle_timeout_ms_ = 0;
 	TaskHandle_t task_handle_ = nullptr;
 };
 

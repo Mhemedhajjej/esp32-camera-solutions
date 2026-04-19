@@ -1,0 +1,35 @@
+menu "Power Service"
+
+config POWER_SERVICE_WAKEUP_GPIO
+	int "Wakeup GPIO"
+	default 33
+	help
+		RTC GPIO used as external wakeup source before deep sleep.
+
+choice POWER_SERVICE_WAKEUP_EDGE
+	prompt "Wakeup level"
+	default POWER_SERVICE_WAKEUP_EDGE_HIGH
+	help
+		Expected signal level on the configured wakeup GPIO.
+
+config POWER_SERVICE_WAKEUP_EDGE_HIGH
+	bool "HIGH"
+
+config POWER_SERVICE_WAKEUP_EDGE_LOW
+	bool "LOW"
+
+endchoice
+
+config POWER_SERVICE_WAKEUP_LEVEL
+	bool
+	default y if POWER_SERVICE_WAKEUP_EDGE_HIGH
+	default n if POWER_SERVICE_WAKEUP_EDGE_LOW
+
+config POWER_SERVICE_RTC_FALLBACK_TIMEOUT_S
+	int "RTC fallback wakeup timeout (seconds)"
+	range 0 86400
+	default 3600
+	help
+		Fallback timer wakeup period in seconds. Set to 0 to disable.
+
+endmenu

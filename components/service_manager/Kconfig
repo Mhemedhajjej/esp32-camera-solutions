@@ -1,0 +1,11 @@
+menu "Service Manager"
+
+config SERVICE_MANAGER_IDLE_TIMEOUT_MS
+	int "Idle timeout before sleep command (ms)"
+	range 0 3600000
+	default 30000
+	help
+		If no event is received for this duration, ServiceManager sends
+		EnterSleep command to PowerService. Set to 0 to disable idle sleep.
+
+endmenu

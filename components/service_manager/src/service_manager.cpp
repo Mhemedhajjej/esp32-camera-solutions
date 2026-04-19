@@ -2,6 +2,11 @@
 
 #include "esp_log.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
+
+#ifndef CONFIG_SERVICE_MANAGER_IDLE_TIMEOUT_MS
+#define CONFIG_SERVICE_MANAGER_IDLE_TIMEOUT_MS 30000
+#endif
 
 namespace esp32_camera_solutions {
 
@@ -37,6 +42,7 @@ bool ServiceManager::init(QueueHandle_t *event_queue, QueueHandle_t *command_que
 	event_queue_ = event_queue;
 	command_queues_ = command_queues;
 	command_queue_count_ = command_queue_count;
+	idle_timeout_ms_ = CONFIG_SERVICE_MANAGER_IDLE_TIMEOUT_MS;
 	if (*event_queue_ == nullptr) {
 		return false;
 	}
@@ -73,26 +79,34 @@ void ServiceManager::taskEntry(void *arg)
 
 void ServiceManager::runTask()
 {
+	if ((event_queue_ == nullptr) || (*event_queue_ == nullptr)) {
+		ESP_LOGE(TAG, "Event queue is invalid, service task stopping");
+		vTaskDelete(nullptr);
+		return;
+	}
+
+	const TickType_t wait_ticks = (idle_timeout_ms_ == 0U)
+		? portMAX_DELAY
+		: pdMS_TO_TICKS(idle_timeout_ms_);
+
 	ServiceEvent event;
 	while (true) {
-		if (!waitForEvent(&event, portMAX_DELAY)) {
+		if (xQueueReceive(*event_queue_, &event, wait_ticks) != pdTRUE) {
+            ServiceCommand sleep_command{};
+            sleep_command.command_id = static_cast<uint32_t>(ServiceCommandId::EnterSleep);
+            if (!sendCommand(ComponentId::PowerService, sleep_command, 0)) {
+                ESP_LOGW(TAG, "Idle timeout reached but failed to send EnterSleep command");
+            } else {
+                ESP_LOGI(TAG, "Idle timeout reached, sent EnterSleep command");
+            }
 			continue;
 		}
 
-		ESP_LOGI(TAG, "Event received origin=%u id=%u param=%u",
-			static_cast<unsigned int>(event.origin),
-			static_cast<unsigned int>(event.event_id),
-			static_cast<unsigned int>(event.param));
+        ESP_LOGI(TAG, "Received event: origin=%u id=%u param=%u",
+            static_cast<unsigned int>(event.origin),
+            static_cast<unsigned int>(event.event_id),
+            static_cast<unsigned int>(event.param));
 	}
-}
-
-bool ServiceManager::waitForEvent(ServiceEvent *event, TickType_t timeout_ticks)
-{
-	if ((event_queue_ == nullptr) || (*event_queue_ == nullptr) || (event == nullptr)) {
-		return false;
-	}
-
-	return xQueueReceive(*event_queue_, event, timeout_ticks) == pdTRUE;
 }
 
 bool ServiceManager::sendCommand(ComponentId component, const ServiceCommand &command, TickType_t timeout_ticks)
