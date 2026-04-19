@@ -1,0 +1,42 @@
+name: ESP-IDF Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ESP-IDF Build
+        shell: bash
+        run: |
+          if [[ -f /opt/esp/idf/export.sh ]]; then
+            . /opt/esp/idf/export.sh
+          elif [[ -n "${IDF_PATH:-}" && -f "$IDF_PATH/export.sh" ]]; then
+            . "$IDF_PATH/export.sh"
+          else
+            echo "ESP-IDF export.sh not found"
+            exit 1
+          fi
+          idf.py build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-camera-solutions-build
+          path: |
+            build/esp32-camera-solutions.bin
+            build/esp32-camera-solutions.elf
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/flasher_args.json
+          if-no-files-found: error

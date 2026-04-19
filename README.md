@@ -157,6 +157,46 @@ idf.py build
 idf.py flash monitor
 ```
 
+## GitHub CLI Build Flow
+
+This repository includes a CI workflow at [.github/workflows/build.yml](.github/workflows/build.yml) that builds with ESP-IDF in GitHub Actions and uploads binaries as artifacts.
+
+1. Authenticate GitHub CLI:
+
+```bash
+gh auth login
+```
+
+2. Trigger a manual build workflow:
+
+```bash
+gh workflow run build.yml --ref main
+```
+
+3. List recent workflow runs:
+
+```bash
+gh run list --workflow build.yml --limit 5
+```
+
+4. Watch latest run live:
+
+```bash
+gh run watch
+```
+
+5. Download artifacts from a completed run:
+
+```bash
+gh run download <run-id> --dir artifacts
+```
+
+6. View logs for a run if build fails:
+
+```bash
+gh run view <run-id> --log
+```
+
 ## Project Layout
 
 ```text
