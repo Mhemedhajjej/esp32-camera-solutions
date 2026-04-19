@@ -1,5 +1,4 @@
 #include "Application.h"
-#include "power_manager.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,11 +22,38 @@ void Application::run()
     mainLoop();
 }
 
+bool Application::initQueues()
+{
+    if (event_queue_ == nullptr) {
+        event_queue_ = xQueueCreate(kEventQueueLength, sizeof(ServiceEvent));
+        if (event_queue_ == nullptr) {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < static_cast<size_t>(ComponentId::Count); ++i) {
+        if (command_queues_[i] == nullptr) {
+            command_queues_[i] = xQueueCreate(kCommandQueueLength, sizeof(ServiceCommand));
+            if (command_queues_[i] == nullptr) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 void Application::initComponents()
 {
-#if CONFIG_POWER_MANAGER_ENABLE
-    PowerManager::Get().init();
-#endif
+    if (!initQueues()) {
+        ESP_LOGE(TAG, "Failed to create application queues");
+        return;
+    }
+
+    if (!ServiceManager::Get().init(&event_queue_, command_queues_, static_cast<size_t>(ComponentId::Count))) {
+        ESP_LOGE(TAG, "Failed to initialize service manager queue bindings");
+        return;
+    }
 }
 
 void Application::mainLoop()
