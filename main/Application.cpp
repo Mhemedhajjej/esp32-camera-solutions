@@ -1,4 +1,5 @@
 #include "Application.h"
+#include "camera_service.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -58,6 +59,11 @@ void Application::initComponents()
 
     if (!PowerService::Get().init(&event_queue_, &command_queues_[static_cast<size_t>(ComponentId::PowerService)])) {
         ESP_LOGE(TAG, "Failed to initialize power service");
+        return;
+    }
+
+    if (!CameraService::Get().init(&event_queue_, &command_queues_[static_cast<size_t>(ComponentId::CameraService)])) {
+        ESP_LOGE(TAG, "Failed to initialize camera service");
         return;
     }
 }

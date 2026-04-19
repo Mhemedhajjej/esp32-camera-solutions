@@ -11,3 +11,4 @@ CMakeLists.txt.user
 *.dat
 *.pyc
 .vscode/
+managed_components/

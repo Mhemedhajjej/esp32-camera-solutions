@@ -24,10 +24,13 @@ enum class ServiceEventId : uint32_t {
 	Unknown = 0,
 	PowerWakeupCause,
 	PowerResetReason,
+	CameraFrameReady,
+	CameraError,
 };
 
 enum class ComponentId : uint8_t {
 	PowerService = 0,
+	CameraService,
 	Count,
 };
 
@@ -39,6 +42,9 @@ struct ServiceCommand {
 enum class ServiceCommandId : uint32_t {
 	Unknown = 0,
 	EnterSleep,
+	CaptureFrame,
+	StartStream,
+	StopStream,
 };
 
 class ServiceManager {

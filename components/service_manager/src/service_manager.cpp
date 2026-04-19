@@ -1,6 +1,7 @@
 #include "service_manager.h"
 
 #include "esp_log.h"
+#include "esp_sleep.h"
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
@@ -92,20 +93,62 @@ void ServiceManager::runTask()
 	ServiceEvent event;
 	while (true) {
 		if (xQueueReceive(*event_queue_, &event, wait_ticks) != pdTRUE) {
-            ServiceCommand sleep_command{};
-            sleep_command.command_id = static_cast<uint32_t>(ServiceCommandId::EnterSleep);
-            if (!sendCommand(ComponentId::PowerService, sleep_command, 0)) {
-                ESP_LOGW(TAG, "Idle timeout reached but failed to send EnterSleep command");
-            } else {
-                ESP_LOGI(TAG, "Idle timeout reached, sent EnterSleep command");
-            }
+			ServiceCommand sleep_command{};
+			sleep_command.command_id = static_cast<uint32_t>(ServiceCommandId::EnterSleep);
+			if (!sendCommand(ComponentId::PowerService, sleep_command, 0)) {
+				ESP_LOGW(TAG, "Idle timeout reached but failed to send EnterSleep command");
+			} else {
+				ESP_LOGI(TAG, "Idle timeout reached, sent EnterSleep command");
+			}
 			continue;
 		}
 
-        ESP_LOGI(TAG, "Received event: origin=%u id=%u param=%u",
-            static_cast<unsigned int>(event.origin),
-            static_cast<unsigned int>(event.event_id),
-            static_cast<unsigned int>(event.param));
+		ESP_LOGI(TAG, "Received event: origin=%u id=%u param=%u",
+			static_cast<unsigned int>(event.origin),
+			static_cast<unsigned int>(event.event_id),
+			static_cast<unsigned int>(event.param));
+
+		switch (static_cast<ServiceEventId>(event.event_id)) {
+		case ServiceEventId::PowerWakeupCause:
+			switch (static_cast<esp_sleep_wakeup_cause_t>(event.param)) {
+			case ESP_SLEEP_WAKEUP_EXT0:
+			case ESP_SLEEP_WAKEUP_EXT1:
+			case ESP_SLEEP_WAKEUP_TIMER: {
+				ServiceCommand capture_command{};
+				capture_command.command_id = static_cast<uint32_t>(ServiceCommandId::CaptureFrame);
+				if (!sendCommand(ComponentId::CameraService, capture_command, 0)) {
+					ESP_LOGW(TAG, "Wakeup trigger detected but failed to send CaptureFrame command");
+				} else {
+					ESP_LOGI(TAG, "Wakeup trigger detected, sent CaptureFrame command");
+				}
+				break;
+			}
+
+			default:
+				ESP_LOGI(TAG, "Power wakeup cause event does not trigger capture");
+				break;
+			}
+			break;
+
+		case ServiceEventId::PowerResetReason:
+			ESP_LOGI(TAG, "Power reset reason event received");
+			break;
+
+		case ServiceEventId::CameraFrameReady:
+			ESP_LOGI(TAG, "Camera frame ready event received: frame_len=%u",
+				static_cast<unsigned int>(event.param));
+			break;
+
+		case ServiceEventId::CameraError:
+			ESP_LOGW(TAG, "Camera error event received: err=%u",
+				static_cast<unsigned int>(event.param));
+			break;
+
+		default:
+			ESP_LOGI(TAG, "Event received with no handler yet");
+			break;
+		}
+
 	}
 }
 

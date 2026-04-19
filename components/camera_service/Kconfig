@@ -1,0 +1,100 @@
+menu "Camera Service"
+
+config CAMERA_SERVICE_XCLK_FREQ_HZ
+	int "XCLK frequency (Hz)"
+	range 1000000 40000000
+	default 20000000
+	help
+		External clock frequency for the camera sensor.
+
+config CAMERA_SERVICE_PIN_PWDN
+	int "Pin PWDN"
+	default 32
+	help
+		Power down GPIO. Set to -1 if not connected.
+
+config CAMERA_SERVICE_PIN_RESET
+	int "Pin RESET"
+	default -1
+	help
+		Reset GPIO. Set to -1 if not connected.
+
+config CAMERA_SERVICE_PIN_XCLK
+	int "Pin XCLK"
+	default 0
+
+config CAMERA_SERVICE_PIN_SIOD
+	int "Pin SIOD"
+	default 26
+
+config CAMERA_SERVICE_PIN_SIOC
+	int "Pin SIOC"
+	default 27
+
+config CAMERA_SERVICE_PIN_D7
+	int "Pin D7"
+	default 35
+
+config CAMERA_SERVICE_PIN_D6
+	int "Pin D6"
+	default 34
+
+config CAMERA_SERVICE_PIN_D5
+	int "Pin D5"
+	default 39
+
+config CAMERA_SERVICE_PIN_D4
+	int "Pin D4"
+	default 36
+
+config CAMERA_SERVICE_PIN_D3
+	int "Pin D3"
+	default 21
+
+config CAMERA_SERVICE_PIN_D2
+	int "Pin D2"
+	default 19
+
+config CAMERA_SERVICE_PIN_D1
+	int "Pin D1"
+	default 18
+
+config CAMERA_SERVICE_PIN_D0
+	int "Pin D0"
+	default 5
+
+config CAMERA_SERVICE_PIN_VSYNC
+	int "Pin VSYNC"
+	default 25
+
+config CAMERA_SERVICE_PIN_HREF
+	int "Pin HREF"
+	default 23
+
+config CAMERA_SERVICE_PIN_PCLK
+	int "Pin PCLK"
+	default 22
+
+config CAMERA_SERVICE_FRAME_SIZE
+	int "Frame buffer size (bytes)"
+	default 65536
+	help
+		Size in bytes of each allocated frame buffer.
+		Increase for higher resolutions (e.g., 307200 for VGA).
+
+config CAMERA_SERVICE_FRAME_BUF_COUNT
+	int "Number of frame buffers"
+	range 1 4
+	default 1
+	help
+		Number of DMA frame buffers to allocate.
+		More buffers reduce frame drop rate at the cost of RAM.
+
+config CAMERA_SERVICE_JPEG_QUALITY
+	int "JPEG compression quality (0-63, lower = better)"
+	range 0 63
+	default 12
+	help
+		JPEG quantization quality parameter passed to the image sensor.
+
+endmenu
