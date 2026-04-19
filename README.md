@@ -1,124 +1,188 @@
-# ESP32 Camera Solutions v0.1
+# ESP32 Camera Solutions
 
-A modular, configurable ESP32-CAM firmware framework for various camera applications. The architecture supports feature-driven development with configuration-based builds for different use cases.
+ESP32 firmware project using ESP-IDF with a queue-driven service architecture.
 
-## Architecture
+## Top-Level System View
 
-The framework is built around modular components that can be independently enabled/disabled:
+The design is intentionally service-oriented and scalable.
 
-- **Power Manager** (v0.1): Automatic idle deep sleep and external wakeup
-- **Camera Service** (planned): Image capture and video streaming
-- **WiFi Manager** (planned): Network connectivity and remote control
-- **Storage** (planned): SD card and cloud integration
+Core building blocks:
 
-## Configuration-Based Builds
+1. Application layer
+- Creates and owns shared IPC resources (queues).
+- Starts core orchestration and service tasks.
 
-Different binaries are generated from the same codebase via `Kconfig` options:
+2. Service Manager
+- Central orchestrator for event consumption and command dispatch.
+- Applies system policies such as idle-time deep sleep.
+
+3. Service components (N)
+- Each service owns its task logic.
+- Each service publishes events to the shared event queue.
+- Each service consumes commands from its own command queue.
+
+Scalability model:
+
+1. Add a new service (camera, network, flash LED, etc.).
+2. Assign a new `ComponentId` and command queue entry.
+3. Register/init it from Application with queue pointers.
+4. Keep orchestration policy centralized in Service Manager.
+
+## Runtime Sequence (Scalable)
+
+This is the generic runtime model regardless of how many services exist.
+
+```mermaid
+sequenceDiagram
+	participant APP as Application
+	participant SM as ServiceManager
+	participant SQ as Shared Event Queue
+	participant SVC as Service (Power/Camera/Network/...)
+	participant CQ as Service Command Queue
+
+	APP->>SQ: create shared event queue
+	APP->>CQ: create command queues (one per service)
+	APP->>SM: init(event_queue, command_queues)
+	APP->>SVC: init(event_queue, service_command_queue)
+
+	SVC->>SQ: publish ServiceEvent
+	SM->>SQ: receive event (with timeout policy)
+	SM->>CQ: send ServiceCommand to target service
+	SVC->>CQ: wait/receive command
+```
+
+## Current Architecture
+
+The current runtime flow is:
+
+1. Application creates shared queues in [main/Application.cpp](main/Application.cpp).
+2. Application initializes ServiceManager and PowerService with queue pointers.
+3. PowerService starts a FreeRTOS task and reports startup power reason as an event.
+4. ServiceManager starts a FreeRTOS task and consumes events.
+5. If ServiceManager receives no events for a configured idle timeout, it sends an EnterSleep command to PowerService.
+6. PowerService receives EnterSleep, configures wakeup sources, then enters deep sleep.
+
+## Components
+
+### Service Manager
+
+Files:
+
+- [components/service_manager/include/service_manager.h](components/service_manager/include/service_manager.h)
+- [components/service_manager/src/service_manager.cpp](components/service_manager/src/service_manager.cpp)
+- [components/service_manager/Kconfig](components/service_manager/Kconfig)
+
+Responsibilities:
+
+- Owns service orchestration task.
+- Waits for events from shared event queue.
+- Sends commands to component command queues.
+- Triggers deep-sleep command after idle timeout.
+
+Config:
+
+- SERVICE_MANAGER_IDLE_TIMEOUT_MS
+
+Meaning:
+
+- Greater than 0: timeout in milliseconds before sending EnterSleep.
+- 0: wait forever for events (no idle-triggered sleep).
+
+### Power Service
+
+Files:
+
+- [components/power_service/include/power_service.h](components/power_service/include/power_service.h)
+- [components/power_service/src/power_service.cpp](components/power_service/src/power_service.cpp)
+- [components/power_service/Kconfig](components/power_service/Kconfig)
+
+Responsibilities:
+
+- Owns power task.
+- Detects startup reason:
+- wakeup cause after deep sleep, or
+- reset reason on normal boot/reset.
+- Posts detected reason to shared event queue.
+- Waits for EnterSleep command.
+- Configures wakeup sources and enters deep sleep.
+
+Config:
+
+- POWER_SERVICE_WAKEUP_GPIO
+- POWER_SERVICE_WAKEUP_EDGE_HIGH / POWER_SERVICE_WAKEUP_EDGE_LOW
+- POWER_SERVICE_RTC_FALLBACK_TIMEOUT_S
+
+Wakeup behavior:
+
+- External GPIO wakeup through ext0 with configured level.
+- RTC timer fallback wakeup if timeout is greater than 0.
+
+## Queues
+
+Queues are created in [main/Application.cpp](main/Application.cpp):
+
+- Event queue: shared queue for service events.
+- Command queues: one queue per component id.
+
+Queue message types are defined in [components/service_manager/include/service_manager.h](components/service_manager/include/service_manager.h):
+
+- ServiceEvent
+- ServiceCommand
+- ServiceEventId
+- ServiceCommandId
+
+## Build, Flash, Monitor
+
+1. Source ESP-IDF environment:
+
+```bash
+. /path/to/esp-idf/export.sh
+```
+
+2. Configure options:
 
 ```bash
 idf.py menuconfig
 ```
 
-Select your use case and required features. The build system includes/excludes components accordingly.
+3. Build:
 
-## Quick Start
+```bash
+idf.py build
+```
 
-### Setup
+4. Flash and monitor:
 
-1. Set the ESP-IDF environment:
-   ```bash
-   . /path/to/esp-idf/export.sh
-   ```
-
-2. Enter the project directory:
-   ```bash
-   cd /path/to/esp32-camera-solutions
-   ```
-
-3. Configure for your use case:
-   ```bash
-   idf.py menuconfig
-   ```
-   - Select power manager options (GPIO, timeout)
-   - More options will appear as components are added
-
-4. Build and flash:
-   ```bash
-   idf.py build
-   idf.py flash
-   idf.py monitor
-   ```
-
-## Development Roadmap
-
-**v0.1 (Current)**
-- Power manager with configurable idle sleep and external wakeup
-
-**v0.2**
-- Camera service with image capture
-- Basic HTTP API for image retrieval
-
-**v0.3**
-- WiFi manager with network connectivity
-- Remote control interface
-
-**v0.4**
-- Storage service (SD card support)
-- Local file management
-
-**v1.0**
-- Advanced features and optimizations
-- Fully composable configuration system
+```bash
+idf.py flash monitor
+```
 
 ## Project Layout
 
-```
+```text
 .
-├── main/                    # Application entry point
-│   ├── app_main.cpp
-│   ├── Application.h
-│   ├── Application.cpp
-│   └── CMakeLists.txt
-├── components/
-│   ├── power_manager/       # Power and sleep management
-│   │   ├── include/
-│   │   ├── src/
-│   │   ├── CMakeLists.txt
-│   │   └── Kconfig
-│   └── disabled/            # Inactive components (for future use)
-│       ├── camera_service/
-│       ├── wifi_manager/
-│       └── storage_sdcard/
-├── CMakeLists.txt
-├── Kconfig
-├── sdkconfig.defaults
-└── README.md
+|-- main/
+|   |-- app_main.cpp
+|   |-- Application.h
+|   |-- Application.cpp
+|   `-- CMakeLists.txt
+|-- components/
+|   |-- service_manager/
+|   |   |-- include/
+|   |   |   `-- service_manager.h
+|   |   |-- src/
+|   |   |   `-- service_manager.cpp
+|   |   |-- CMakeLists.txt
+|   |   `-- Kconfig
+|   `-- power_service/
+|       |-- include/
+|       |   `-- power_service.h
+|       |-- src/
+|       |   `-- power_service.cpp
+|       |-- CMakeLists.txt
+|       `-- Kconfig
+|-- CMakeLists.txt
+|-- Kconfig
+|-- sdkconfig.defaults
+`-- README.md
 ```
-
-## Component Management
-
-### Adding a new component for v0.2+
-
-```bash
-# Restore a disabled component
-mv components/disabled/component_name components/
-
-# Update Kconfig to include it
-# Update main/CMakeLists.txt REQUIRES list
-```
-
-### Creating a new component
-
-Each component must have:
-- `include/component_name.h` - Public API
-- `src/component_name.cpp` - Implementation
-- `CMakeLists.txt` - Build configuration
-- `Kconfig` - Configuration options
-
-## Versioning & Releases
-
-Each version adds new components and features:
-- v0.x: Beta phase, individual component rollout
-- v1.0+: Feature-complete with full configuration flexibility
-
-GitHub releases will include pre-built binaries for different configurations.
