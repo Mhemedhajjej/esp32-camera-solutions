@@ -83,6 +83,11 @@ private:
 	static void taskEntry(void *arg);
 	void runTask();
 
+	void handlePowerEvent(const ServiceEvent &event);
+	void handleCameraEvent(const ServiceEvent &event);
+	void handleStorageEvent(const ServiceEvent &event);
+	void sendReleaseCaptureFrame(uintptr_t frame_handle);
+
 	QueueHandle_t *event_queue_ = nullptr;
 	QueueHandle_t *command_queues_ = nullptr;
 	size_t command_queue_count_ = 0;
