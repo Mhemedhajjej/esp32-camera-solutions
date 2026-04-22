@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "power_service.h"
+#include "storage_service.h"
 
 namespace esp32_camera_solutions {
 
@@ -64,6 +65,11 @@ void Application::initComponents()
 
     if (!CameraService::Get().init(&event_queue_, &command_queues_[static_cast<size_t>(ComponentId::CameraService)])) {
         ESP_LOGE(TAG, "Failed to initialize camera service");
+        return;
+    }
+
+    if (!StorageService::Get().init(&event_queue_, &command_queues_[static_cast<size_t>(ComponentId::StorageService)])) {
+        ESP_LOGE(TAG, "Failed to initialize storage service");
         return;
     }
 }

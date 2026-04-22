@@ -1,5 +1,7 @@
 #include "service_manager.h"
 
+#include <cstdlib>
+
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "freertos/task.h"
@@ -135,12 +137,43 @@ void ServiceManager::runTask()
 			break;
 
 		case ServiceEventId::CameraFrameReady:
-			ESP_LOGI(TAG, "Camera frame ready event received: frame_len=%u",
-				static_cast<unsigned int>(event.param));
+			ESP_LOGI(TAG, "Camera frame ready event received: frame_len=%u width=%u height=%u format=%u",
+				static_cast<unsigned int>(event.data_len),
+				static_cast<unsigned int>(event.width),
+				static_cast<unsigned int>(event.height),
+				static_cast<unsigned int>(event.format));
+			{
+				ServiceCommand store_command{};
+				store_command.command_id = static_cast<uint32_t>(ServiceCommandId::StoreCapture);
+				store_command.param = event.param;
+				store_command.data_ptr = event.data_ptr;
+				store_command.data_len = event.data_len;
+				store_command.width = event.width;
+				store_command.height = event.height;
+				store_command.format = event.format;
+				if (!sendCommand(ComponentId::StorageService, store_command, 0)) {
+					ESP_LOGW(TAG, "Failed to send StoreCapture command to storage service");
+					if (event.data_ptr != 0U) {
+						std::free(reinterpret_cast<void *>(event.data_ptr));
+					}
+				} else {
+					ESP_LOGI(TAG, "Sent StoreCapture command to storage service");
+				}
+			}
 			break;
 
 		case ServiceEventId::CameraError:
 			ESP_LOGW(TAG, "Camera error event received: err=%u",
+				static_cast<unsigned int>(event.param));
+			break;
+
+		case ServiceEventId::StorageWriteDone:
+			ESP_LOGI(TAG, "Storage write done event received: frame_len=%u",
+				static_cast<unsigned int>(event.param));
+			break;
+
+		case ServiceEventId::StorageError:
+			ESP_LOGW(TAG, "Storage error event received: err=%u",
 				static_cast<unsigned int>(event.param));
 			break;
 

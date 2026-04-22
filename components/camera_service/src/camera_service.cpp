@@ -1,5 +1,8 @@
 #include "camera_service.h"
 
+#include <cstring>
+#include <cstdlib>
+
 #include "esp_camera.h"
 #include "esp_log.h"
 #include "freertos/task.h"
@@ -185,7 +188,27 @@ void CameraService::runTask()
 					static_cast<unsigned int>(frame->height),
 					static_cast<unsigned int>(frame->format));
 
-				(void)postEvent(makeEvent(ServiceEventId::CameraFrameReady, static_cast<uint32_t>(frame->len)), 0);
+				uint8_t *frame_copy = static_cast<uint8_t *>(std::malloc(frame->len));
+				if (frame_copy == nullptr) {
+					ESP_LOGE(TAG, "Failed to allocate frame copy buffer (%u bytes)",
+						static_cast<unsigned int>(frame->len));
+					esp_camera_fb_return(frame);
+					(void)postEvent(makeEvent(ServiceEventId::CameraError, static_cast<uint32_t>(ESP_ERR_NO_MEM)), 0);
+					break;
+				}
+
+				std::memcpy(frame_copy, frame->buf, frame->len);
+
+				ServiceEvent frame_ready{};
+				frame_ready.origin = EventOrigin::Component;
+				frame_ready.event_id = static_cast<uint32_t>(ServiceEventId::CameraFrameReady);
+				frame_ready.param = static_cast<uint32_t>(frame->len);
+				frame_ready.data_ptr = reinterpret_cast<uintptr_t>(frame_copy);
+				frame_ready.data_len = static_cast<uint32_t>(frame->len);
+				frame_ready.width = frame->width;
+				frame_ready.height = frame->height;
+				frame_ready.format = static_cast<uint32_t>(frame->format);
+				(void)postEvent(frame_ready, 0);
 				esp_camera_fb_return(frame);
 			}
 			break;

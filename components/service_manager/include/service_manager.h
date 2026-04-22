@@ -18,6 +18,11 @@ struct ServiceEvent {
 	EventOrigin origin = EventOrigin::Unknown;
 	uint32_t event_id = 0;
 	uint32_t param = 0;
+	uintptr_t data_ptr = 0;
+	uint32_t data_len = 0;
+	uint16_t width = 0;
+	uint16_t height = 0;
+	uint32_t format = 0;
 };
 
 enum class ServiceEventId : uint32_t {
@@ -26,17 +31,25 @@ enum class ServiceEventId : uint32_t {
 	PowerResetReason,
 	CameraFrameReady,
 	CameraError,
+	StorageWriteDone,
+	StorageError,
 };
 
 enum class ComponentId : uint8_t {
 	PowerService = 0,
 	CameraService,
+	StorageService,
 	Count,
 };
 
 struct ServiceCommand {
 	uint32_t command_id = 0;
 	uint32_t param = 0;
+	uintptr_t data_ptr = 0;
+	uint32_t data_len = 0;
+	uint16_t width = 0;
+	uint16_t height = 0;
+	uint32_t format = 0;
 };
 
 enum class ServiceCommandId : uint32_t {
@@ -45,6 +58,7 @@ enum class ServiceCommandId : uint32_t {
 	CaptureFrame,
 	StartStream,
 	StopStream,
+	StoreCapture,
 };
 
 class ServiceManager {
