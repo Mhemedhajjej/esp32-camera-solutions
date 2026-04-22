@@ -94,6 +94,19 @@ void ServiceManager::runTask()
 
 	ServiceEvent event;
 	while (true) {
+		auto sendReleaseCaptureFrame = [this](uintptr_t frame_handle) {
+			if (frame_handle == 0U) {
+				return;
+			}
+
+			ServiceCommand release_command{};
+			release_command.command_id = static_cast<uint32_t>(ServiceCommandId::ReleaseCaptureFrame);
+			release_command.param = static_cast<uint32_t>(frame_handle);
+			if (!sendCommand(ComponentId::CameraService, release_command, 0)) {
+				ESP_LOGW(TAG, "Failed to send ReleaseCaptureFrame command");
+			}
+		};
+
 		if (xQueueReceive(*event_queue_, &event, wait_ticks) != pdTRUE) {
 			ServiceCommand sleep_command{};
 			sleep_command.command_id = static_cast<uint32_t>(ServiceCommandId::EnterSleep);
@@ -105,14 +118,14 @@ void ServiceManager::runTask()
 			continue;
 		}
 
-		ESP_LOGI(TAG, "Received event: origin=%u id=%u param=%u",
+		ESP_LOGI(TAG, "Received event: origin=%u id=%u data_ptr=%p",
 			static_cast<unsigned int>(event.origin),
 			static_cast<unsigned int>(event.event_id),
-			static_cast<unsigned int>(event.param));
+			reinterpret_cast<void *>(event.data_ptr));
 
 		switch (static_cast<ServiceEventId>(event.event_id)) {
 		case ServiceEventId::PowerWakeupCause:
-			switch (static_cast<esp_sleep_wakeup_cause_t>(event.param)) {
+			switch (static_cast<esp_sleep_wakeup_cause_t>(event.data_ptr)) {
 			case ESP_SLEEP_WAKEUP_EXT0:
 			case ESP_SLEEP_WAKEUP_EXT1:
 			case ESP_SLEEP_WAKEUP_TIMER: {
@@ -133,29 +146,43 @@ void ServiceManager::runTask()
 			break;
 
 		case ServiceEventId::PowerResetReason:
-			ESP_LOGI(TAG, "Power reset reason event received");
+			ESP_LOGI(TAG, "Power reset reason event received: reason=%u",
+				static_cast<unsigned int>(event.data_ptr));
 			break;
 
 		case ServiceEventId::CameraFrameReady:
-			ESP_LOGI(TAG, "Camera frame ready event received: frame_len=%u width=%u height=%u format=%u",
-				static_cast<unsigned int>(event.data_len),
-				static_cast<unsigned int>(event.width),
-				static_cast<unsigned int>(event.height),
-				static_cast<unsigned int>(event.format));
+			if (event.data_ptr == 0U) {
+				ESP_LOGW(TAG, "Camera frame ready event received with null pointer");
+				break;
+			}
 			{
+				CaptureFramePayload *payload = reinterpret_cast<CaptureFramePayload *>(event.data_ptr);
+				if (payload == nullptr) {
+					ESP_LOGW(TAG, "Camera frame payload is null");
+					break;
+				}
+
+				ESP_LOGI(TAG, "Camera frame ready event received: frame_len=%u width=%u height=%u format=%u",
+					static_cast<unsigned int>(payload->data_len),
+					static_cast<unsigned int>(payload->width),
+					static_cast<unsigned int>(payload->height),
+					static_cast<unsigned int>(payload->format));
+
 				ServiceCommand store_command{};
 				store_command.command_id = static_cast<uint32_t>(ServiceCommandId::StoreCapture);
-				store_command.param = event.param;
-				store_command.data_ptr = event.data_ptr;
-				store_command.data_len = event.data_len;
-				store_command.width = event.width;
-				store_command.height = event.height;
-				store_command.format = event.format;
+				store_command.param = static_cast<uint32_t>(payload->frame_handle);
+				store_command.data_ptr = payload->data_ptr;
+				store_command.data_len = payload->data_len;
+				store_command.width = payload->width;
+				store_command.height = payload->height;
+				store_command.format = payload->format;
+
+				const uintptr_t frame_handle = payload->frame_handle;
+				std::free(payload);
+
 				if (!sendCommand(ComponentId::StorageService, store_command, 0)) {
 					ESP_LOGW(TAG, "Failed to send StoreCapture command to storage service");
-					if (event.data_ptr != 0U) {
-						std::free(reinterpret_cast<void *>(event.data_ptr));
-					}
+					sendReleaseCaptureFrame(frame_handle);
 				} else {
 					ESP_LOGI(TAG, "Sent StoreCapture command to storage service");
 				}
@@ -164,17 +191,19 @@ void ServiceManager::runTask()
 
 		case ServiceEventId::CameraError:
 			ESP_LOGW(TAG, "Camera error event received: err=%u",
-				static_cast<unsigned int>(event.param));
+				static_cast<unsigned int>(event.data_ptr));
 			break;
 
 		case ServiceEventId::StorageWriteDone:
-			ESP_LOGI(TAG, "Storage write done event received: frame_len=%u",
-				static_cast<unsigned int>(event.param));
+			ESP_LOGI(TAG, "Storage write done event received: handle=%u",
+				static_cast<unsigned int>(event.data_ptr));
+			sendReleaseCaptureFrame(event.data_ptr);
 			break;
 
 		case ServiceEventId::StorageError:
-			ESP_LOGW(TAG, "Storage error event received: err=%u",
-				static_cast<unsigned int>(event.param));
+			ESP_LOGW(TAG, "Storage error event received: handle=%u",
+				static_cast<unsigned int>(event.data_ptr));
+			sendReleaseCaptureFrame(event.data_ptr);
 			break;
 
 		default:

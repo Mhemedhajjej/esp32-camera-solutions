@@ -61,7 +61,7 @@ static bool ensureStorageMounted()
 
 static bool writeFrameToStorage(const ServiceCommand &command)
 {
-	if ((command.data_ptr == 0U) || (command.data_len == 0U)) {
+	if (command.data_ptr == 0U) {
 		ESP_LOGE(TAG, "Invalid StoreCapture payload: ptr=%p len=%u",
 			reinterpret_cast<void *>(command.data_ptr),
 			static_cast<unsigned int>(command.data_len));
@@ -91,11 +91,9 @@ static bool writeFrameToStorage(const ServiceCommand &command)
 		return false;
 	}
 
+	const uint8_t *frame_buf = reinterpret_cast<const uint8_t *>(command.data_ptr);
 	const size_t bytes_to_write = static_cast<size_t>(command.data_len);
-	const size_t bytes_written = std::fwrite(reinterpret_cast<const void *>(command.data_ptr),
-		1,
-		bytes_to_write,
-		file);
+	const size_t bytes_written = std::fwrite(frame_buf, 1, bytes_to_write, file);
 	std::fclose(file);
 
 	if (bytes_written != bytes_to_write) {
@@ -115,12 +113,12 @@ static bool writeFrameToStorage(const ServiceCommand &command)
 	return true;
 }
 
-static ServiceEvent makeEvent(ServiceEventId event_id, uint32_t param)
+static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
 {
 	ServiceEvent event{};
 	event.origin = EventOrigin::Component;
 	event.event_id = static_cast<uint32_t>(event_id);
-	event.param = param;
+	event.data_ptr = data_ptr;
 	return event;
 }
 
@@ -216,13 +214,9 @@ void StorageService::runTask()
 			ESP_LOGI(TAG, "StoreCapture command received, frame_len=%u",
 				static_cast<unsigned int>(command.data_len));
 			if (writeFrameToStorage(command)) {
-				(void)postEvent(makeEvent(ServiceEventId::StorageWriteDone, command.data_len), 0);
+				(void)postEvent(makeEvent(ServiceEventId::StorageWriteDone, command.param), 0);
 			} else {
-				(void)postEvent(makeEvent(ServiceEventId::StorageError, static_cast<uint32_t>(ESP_FAIL)), 0);
-			}
-
-			if (command.data_ptr != 0U) {
-				std::free(reinterpret_cast<void *>(command.data_ptr));
+				(void)postEvent(makeEvent(ServiceEventId::StorageError, command.param), 0);
 			}
 			break;
 

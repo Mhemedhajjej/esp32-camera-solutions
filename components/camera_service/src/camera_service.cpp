@@ -1,6 +1,5 @@
 #include "camera_service.h"
 
-#include <cstring>
 #include <cstdlib>
 
 #include "esp_camera.h"
@@ -59,12 +58,12 @@ static camera_config_t buildCameraConfig()
 	return config;
 }
 
-static ServiceEvent makeEvent(ServiceEventId event_id, uint32_t param)
+static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
 {
 	ServiceEvent event{};
 	event.origin = EventOrigin::Component;
 	event.event_id = static_cast<uint32_t>(event_id);
-	event.param = param;
+	event.data_ptr = data_ptr;
 	return event;
 }
 
@@ -155,7 +154,7 @@ void CameraService::runTask()
 		ServiceEvent event{};
 		event.origin = EventOrigin::Component;
 		event.event_id = static_cast<uint32_t>(ServiceEventId::CameraError);
-		event.param = static_cast<uint32_t>(init_result);
+		event.data_ptr = static_cast<uintptr_t>(init_result);
 		(void)postEvent(event, 0);
 		vTaskDelete(nullptr);
 		return;
@@ -188,29 +187,39 @@ void CameraService::runTask()
 					static_cast<unsigned int>(frame->height),
 					static_cast<unsigned int>(frame->format));
 
-				uint8_t *frame_copy = static_cast<uint8_t *>(std::malloc(frame->len));
-				if (frame_copy == nullptr) {
-					ESP_LOGE(TAG, "Failed to allocate frame copy buffer (%u bytes)",
-						static_cast<unsigned int>(frame->len));
+				CaptureFramePayload *payload = static_cast<CaptureFramePayload *>(std::malloc(sizeof(CaptureFramePayload)));
+				if (payload == nullptr) {
+					ESP_LOGE(TAG, "Failed to allocate capture payload");
 					esp_camera_fb_return(frame);
 					(void)postEvent(makeEvent(ServiceEventId::CameraError, static_cast<uint32_t>(ESP_ERR_NO_MEM)), 0);
 					break;
 				}
 
-				std::memcpy(frame_copy, frame->buf, frame->len);
+				payload->frame_handle = reinterpret_cast<uintptr_t>(frame);
+				payload->data_ptr = reinterpret_cast<uintptr_t>(frame->buf);
+				payload->data_len = frame->len;
+				payload->width = frame->width;
+				payload->height = frame->height;
+				payload->format = static_cast<uint32_t>(frame->format);
 
 				ServiceEvent frame_ready{};
 				frame_ready.origin = EventOrigin::Component;
 				frame_ready.event_id = static_cast<uint32_t>(ServiceEventId::CameraFrameReady);
-				frame_ready.param = static_cast<uint32_t>(frame->len);
-				frame_ready.data_ptr = reinterpret_cast<uintptr_t>(frame_copy);
-				frame_ready.data_len = static_cast<uint32_t>(frame->len);
-				frame_ready.width = frame->width;
-				frame_ready.height = frame->height;
-				frame_ready.format = static_cast<uint32_t>(frame->format);
-				(void)postEvent(frame_ready, 0);
-				esp_camera_fb_return(frame);
+				frame_ready.data_ptr = reinterpret_cast<uintptr_t>(payload);
+				if (!postEvent(frame_ready, 0)) {
+					ESP_LOGE(TAG, "Failed to post CameraFrameReady event");
+					std::free(payload);
+					esp_camera_fb_return(frame);
+				}
 			}
+			break;
+
+		case ServiceCommandId::ReleaseCaptureFrame:
+			if (command.param == 0U) {
+				ESP_LOGW(TAG, "ReleaseCaptureFrame received with null handle");
+				break;
+			}
+			esp_camera_fb_return(reinterpret_cast<camera_fb_t *>(static_cast<uintptr_t>(command.param)));
 			break;
 
 		case ServiceCommandId::StartStream:

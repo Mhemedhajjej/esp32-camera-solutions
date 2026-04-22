@@ -17,7 +17,11 @@ enum class EventOrigin : uint8_t {
 struct ServiceEvent {
 	EventOrigin origin = EventOrigin::Unknown;
 	uint32_t event_id = 0;
-	uint32_t param = 0;
+	uintptr_t data_ptr = 0;
+};
+
+struct CaptureFramePayload {
+	uintptr_t frame_handle = 0;
 	uintptr_t data_ptr = 0;
 	uint32_t data_len = 0;
 	uint16_t width = 0;
@@ -59,6 +63,7 @@ enum class ServiceCommandId : uint32_t {
 	StartStream,
 	StopStream,
 	StoreCapture,
+	ReleaseCaptureFrame,
 };
 
 class ServiceManager {

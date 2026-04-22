@@ -101,7 +101,7 @@ void PowerService::runTask()
 		ServiceEvent wakeup_event{};
 		wakeup_event.origin = EventOrigin::Hardware;
 		wakeup_event.event_id = static_cast<uint32_t>(ServiceEventId::PowerWakeupCause);
-		wakeup_event.param = static_cast<uint32_t>(wakeup_cause);
+		wakeup_event.data_ptr = static_cast<uintptr_t>(wakeup_cause);
 		(void)postEvent(wakeup_event, 0);
 		ESP_LOGI(TAG, "Reported wakeup cause=%u", static_cast<unsigned int>(wakeup_cause));
 	} else {
@@ -109,7 +109,7 @@ void PowerService::runTask()
 		ServiceEvent reset_event{};
 		reset_event.origin = EventOrigin::Hardware;
 		reset_event.event_id = static_cast<uint32_t>(ServiceEventId::PowerResetReason);
-		reset_event.param = static_cast<uint32_t>(reset_reason);
+		reset_event.data_ptr = static_cast<uintptr_t>(reset_reason);
 		(void)postEvent(reset_event, 0);
 		ESP_LOGI(TAG, "Reported reset reason=%u", static_cast<unsigned int>(reset_reason));
 	}
