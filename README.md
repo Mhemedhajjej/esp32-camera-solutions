@@ -2,6 +2,11 @@
 
 ESP32 firmware project using ESP-IDF with a queue-driven service architecture.
 
+## Release Status
+
+- Latest tag: `v0.1.0-alpha`
+- Next planned release: `v0.2.0-alpha`
+
 ## Top-Level System View
 
 The design is intentionally service-oriented and scalable.
@@ -222,6 +227,39 @@ gh run download <run-id> --dir artifacts
 ```bash
 gh run view <run-id> --log
 ```
+
+## Release Process (v0.2.0-alpha)
+
+This repository publishes a GitHub Release automatically when a tag matching `v*` is pushed (see [.github/workflows/build.yml](.github/workflows/build.yml)).
+
+1. Ensure working tree is clean and tests/build pass:
+
+```bash
+git status --short
+idf.py build
+```
+
+2. Create and push the release tag:
+
+```bash
+git tag -a v0.2.0-alpha -m "Second alpha release"
+git push origin v0.2.0-alpha
+```
+
+3. Monitor the release workflow:
+
+```bash
+gh run list --workflow build.yml --limit 5
+gh run watch
+```
+
+4. Confirm release assets are attached:
+
+- `esp32-camera-solutions.bin`
+- `esp32-camera-solutions.elf`
+- `bootloader.bin`
+- `partition-table.bin`
+- `flasher_args.json`
 
 ## Project Layout
 
