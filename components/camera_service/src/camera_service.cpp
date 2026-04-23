@@ -61,7 +61,7 @@ static camera_config_t buildCameraConfig()
 static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
 {
 	ServiceEvent event{};
-	event.origin = EventOrigin::Component;
+	event.origin = EventOrigin::CameraService;
 	event.event_id = static_cast<uint32_t>(event_id);
 	event.data_ptr = data_ptr;
 	return event;
@@ -122,9 +122,12 @@ bool CameraService::postEvent(const ServiceEvent &event, TickType_t timeout_tick
 
 bool CameraService::waitForCommand(ServiceCommand *command, TickType_t timeout_ticks)
 {
+	/* guard against invalid destination pointer */
 	if (command == nullptr) {
 		return false;
 	}
+
+	/* block until a command is available or timeout expires */
 	return xQueueReceive(*command_queue_, command, timeout_ticks) == pdTRUE;
 }
 
@@ -145,14 +148,23 @@ void CameraService::taskEntry(void *arg)
 
 void CameraService::runTask()
 {
+	camera_config_t camera_config{};
+	esp_err_t init_result = ESP_FAIL;
+	ServiceEvent event{};
+	ServiceCommand command{};
+	ServiceCommandId cmd_id = ServiceCommandId::Unknown;
+	camera_fb_t *frame = nullptr;
+	CaptureFramePayload *payload = nullptr;
+	ServiceEvent frame_ready{};
+
 	ESP_LOGI(TAG, "Camera service task started");
 
-	camera_config_t camera_config = buildCameraConfig();
-	const esp_err_t init_result = esp_camera_init(&camera_config);
+	camera_config = buildCameraConfig();
+	init_result = esp_camera_init(&camera_config);
 	if (init_result != ESP_OK) {
 		ESP_LOGE(TAG, "esp_camera_init failed: %s", esp_err_to_name(init_result));
-		ServiceEvent event{};
-		event.origin = EventOrigin::Component;
+		event = {};
+		event.origin = EventOrigin::CameraService;
 		event.event_id = static_cast<uint32_t>(ServiceEventId::CameraError);
 		event.data_ptr = static_cast<uintptr_t>(init_result);
 		(void)postEvent(event, 0);
@@ -162,18 +174,20 @@ void CameraService::runTask()
 
 	ESP_LOGI(TAG, "Camera initialized successfully");
 
-	ServiceCommand command{};
 	while (true) {
+		/* wait for service-manager command */
 		if (!waitForCommand(&command, portMAX_DELAY)) {
 			continue;
 		}
 
-		const auto cmd_id = static_cast<ServiceCommandId>(command.command_id);
+		/* dispatch command by id */
+		cmd_id = static_cast<ServiceCommandId>(command.command_id);
 		switch (cmd_id) {
 		case ServiceCommandId::CaptureFrame:
 			ESP_LOGI(TAG, "CaptureFrame command received");
 			{
-				camera_fb_t *frame = esp_camera_fb_get();
+				/* capture one frame from the camera driver */
+				frame = esp_camera_fb_get();
 				if (frame == nullptr) {
 					ESP_LOGE(TAG, "Failed to capture frame");
 					(void)postEvent(makeEvent(ServiceEventId::CameraError, static_cast<uint32_t>(ESP_FAIL)), 0);
@@ -187,7 +201,7 @@ void CameraService::runTask()
 					static_cast<unsigned int>(frame->height),
 					static_cast<unsigned int>(frame->format));
 
-				CaptureFramePayload *payload = static_cast<CaptureFramePayload *>(std::malloc(sizeof(CaptureFramePayload)));
+				payload = static_cast<CaptureFramePayload *>(std::malloc(sizeof(CaptureFramePayload)));
 				if (payload == nullptr) {
 					ESP_LOGE(TAG, "Failed to allocate capture payload");
 					esp_camera_fb_return(frame);
@@ -202,8 +216,9 @@ void CameraService::runTask()
 				payload->height = frame->height;
 				payload->format = static_cast<uint32_t>(frame->format);
 
-				ServiceEvent frame_ready{};
-				frame_ready.origin = EventOrigin::Component;
+				/* post frame payload to service manager for next-stage handling */
+				frame_ready = {};
+				frame_ready.origin = EventOrigin::CameraService;
 				frame_ready.event_id = static_cast<uint32_t>(ServiceEventId::CameraFrameReady);
 				frame_ready.data_ptr = reinterpret_cast<uintptr_t>(payload);
 				if (!postEvent(frame_ready, 0)) {
@@ -215,11 +230,11 @@ void CameraService::runTask()
 			break;
 
 		case ServiceCommandId::ReleaseCaptureFrame:
-			if (command.param == 0U) {
+			if (command.data_ptr == 0U) {
 				ESP_LOGW(TAG, "ReleaseCaptureFrame received with null handle");
 				break;
 			}
-			esp_camera_fb_return(reinterpret_cast<camera_fb_t *>(static_cast<uintptr_t>(command.param)));
+			esp_camera_fb_return(reinterpret_cast<camera_fb_t *>(static_cast<uintptr_t>(command.data_ptr)));
 			break;
 
 		case ServiceCommandId::StartStream:

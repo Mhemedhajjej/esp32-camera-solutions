@@ -99,7 +99,7 @@ void PowerService::runTask()
 	const esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
 	if (wakeup_cause != ESP_SLEEP_WAKEUP_UNDEFINED) {
 		ServiceEvent wakeup_event{};
-		wakeup_event.origin = EventOrigin::Hardware;
+		wakeup_event.origin = EventOrigin::PowerService;
 		wakeup_event.event_id = static_cast<uint32_t>(ServiceEventId::PowerWakeupCause);
 		wakeup_event.data_ptr = static_cast<uintptr_t>(wakeup_cause);
 		(void)postEvent(wakeup_event, 0);
