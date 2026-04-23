@@ -8,10 +8,20 @@
 
 namespace esp32_camera_solutions {
 
+enum class ComponentId : uint8_t {
+	Hardware = 0,
+	PowerService,
+	CameraService,
+	StorageService,
+	Count,
+};
+
 enum class EventOrigin : uint8_t {
 	Unknown = 0,
-	Hardware,
-	Component,
+	Hardware = static_cast<uint8_t>(ComponentId::Hardware),
+	PowerService = static_cast<uint8_t>(ComponentId::PowerService),
+	CameraService = static_cast<uint8_t>(ComponentId::CameraService),
+	StorageService = static_cast<uint8_t>(ComponentId::StorageService),
 };
 
 struct ServiceEvent {
@@ -39,21 +49,9 @@ enum class ServiceEventId : uint32_t {
 	StorageError,
 };
 
-enum class ComponentId : uint8_t {
-	PowerService = 0,
-	CameraService,
-	StorageService,
-	Count,
-};
-
 struct ServiceCommand {
 	uint32_t command_id = 0;
-	uint32_t param = 0;
 	uintptr_t data_ptr = 0;
-	uint32_t data_len = 0;
-	uint16_t width = 0;
-	uint16_t height = 0;
-	uint32_t format = 0;
 };
 
 enum class ServiceCommandId : uint32_t {

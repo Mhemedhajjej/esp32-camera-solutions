@@ -82,20 +82,23 @@ void ServiceManager::taskEntry(void *arg)
 
 void ServiceManager::runTask()
 {
+	ServiceEvent event;
+	ServiceCommand sleep_command{};
+	const TickType_t wait_ticks = (idle_timeout_ms_ == 0U)
+		? portMAX_DELAY
+		: pdMS_TO_TICKS(idle_timeout_ms_);
+
+	
 	if ((event_queue_ == nullptr) || (*event_queue_ == nullptr)) {
 		ESP_LOGE(TAG, "Event queue is invalid, service task stopping");
 		vTaskDelete(nullptr);
 		return;
 	}
 
-	const TickType_t wait_ticks = (idle_timeout_ms_ == 0U)
-		? portMAX_DELAY
-		: pdMS_TO_TICKS(idle_timeout_ms_);
-
-	ServiceEvent event;
 	while (true) {
 		if (xQueueReceive(*event_queue_, &event, wait_ticks) != pdTRUE) {
-			ServiceCommand sleep_command{};
+			/* idle timeout reached without new events */
+			sleep_command = {};
 			sleep_command.command_id = static_cast<uint32_t>(ServiceCommandId::EnterSleep);
 			if (!sendCommand(ComponentId::PowerService, sleep_command, 0)) {
 				ESP_LOGW(TAG, "Idle timeout reached but failed to send EnterSleep command");
@@ -110,19 +113,21 @@ void ServiceManager::runTask()
 			static_cast<unsigned int>(event.event_id),
 			reinterpret_cast<void *>(event.data_ptr));
 
-		switch (static_cast<ServiceEventId>(event.event_id)) {
-		case ServiceEventId::PowerWakeupCause:
-		case ServiceEventId::PowerResetReason:
+		/* Dispatch event to appropriate handler based on origin */
+		switch (static_cast<ComponentId>(event.origin)) {
+		case ComponentId::Hardware:
 			handlePowerEvent(event);
 			break;
 
-		case ServiceEventId::CameraFrameReady:
-		case ServiceEventId::CameraError:
+		case ComponentId::PowerService:
+			handlePowerEvent(event);
+			break;
+
+		case ComponentId::CameraService:
 			handleCameraEvent(event);
 			break;
 
-		case ServiceEventId::StorageWriteDone:
-		case ServiceEventId::StorageError:
+		case ComponentId::StorageService:
 			handleStorageEvent(event);
 			break;
 
@@ -135,13 +140,16 @@ void ServiceManager::runTask()
 
 void ServiceManager::sendReleaseCaptureFrame(uintptr_t frame_handle)
 {
+	ServiceCommand release_command{
+		.command_id = static_cast<uint32_t>(ServiceCommandId::ReleaseCaptureFrame),
+		.data_ptr = frame_handle,
+	};
+	
 	if (frame_handle == 0U) {
 		return;
 	}
 
-	ServiceCommand release_command{};
-	release_command.command_id = static_cast<uint32_t>(ServiceCommandId::ReleaseCaptureFrame);
-	release_command.param = static_cast<uint32_t>(frame_handle);
+	/* send ReleaseCaptureFrame command to camera service to release the frame buffer */
 	if (!sendCommand(ComponentId::CameraService, release_command, 0)) {
 		ESP_LOGW(TAG, "Failed to send ReleaseCaptureFrame command");
 	}
@@ -149,14 +157,18 @@ void ServiceManager::sendReleaseCaptureFrame(uintptr_t frame_handle)
 
 void ServiceManager::handlePowerEvent(const ServiceEvent &event)
 {
+	ServiceCommand capture_command{
+		.command_id = static_cast<uint32_t>(ServiceCommandId::CaptureFrame),
+		.data_ptr = 0U,
+	};
+
+	/* For power events, we check if the wakeup cause is one that should trigger a capture */
 	switch (static_cast<ServiceEventId>(event.event_id)) {
 	case ServiceEventId::PowerWakeupCause:
 		switch (static_cast<esp_sleep_wakeup_cause_t>(event.data_ptr)) {
 		case ESP_SLEEP_WAKEUP_EXT0:
 		case ESP_SLEEP_WAKEUP_EXT1:
 		case ESP_SLEEP_WAKEUP_TIMER: {
-			ServiceCommand capture_command{};
-			capture_command.command_id = static_cast<uint32_t>(ServiceCommandId::CaptureFrame);
 			if (!sendCommand(ComponentId::CameraService, capture_command, 0)) {
 				ESP_LOGW(TAG, "Wakeup trigger detected but failed to send CaptureFrame command");
 			} else {
@@ -170,7 +182,8 @@ void ServiceManager::handlePowerEvent(const ServiceEvent &event)
 			break;
 		}
 		break;
-
+	
+	/* For power reset reason events, we just log the reason for now */
 	case ServiceEventId::PowerResetReason:
 		ESP_LOGI(TAG, "Power reset reason event received: reason=%u",
 			static_cast<unsigned int>(event.data_ptr));
@@ -183,6 +196,10 @@ void ServiceManager::handlePowerEvent(const ServiceEvent &event)
 
 void ServiceManager::handleCameraEvent(const ServiceEvent &event)
 {
+	CaptureFramePayload *payload = nullptr;
+	ServiceCommand store_command{};
+	uintptr_t frame_handle = 0U;
+
 	switch (static_cast<ServiceEventId>(event.event_id)) {
 	case ServiceEventId::CameraFrameReady: {
 		if (event.data_ptr == 0U) {
@@ -190,28 +207,25 @@ void ServiceManager::handleCameraEvent(const ServiceEvent &event)
 			break;
 		}
 
-		CaptureFramePayload *payload = reinterpret_cast<CaptureFramePayload *>(event.data_ptr);
-
+		/* fetch camera frame payload */
+		payload = reinterpret_cast<CaptureFramePayload *>(event.data_ptr);
 		ESP_LOGI(TAG, "Camera frame ready: frame_len=%u width=%u height=%u format=%u",
 			static_cast<unsigned int>(payload->data_len),
 			static_cast<unsigned int>(payload->width),
 			static_cast<unsigned int>(payload->height),
 			static_cast<unsigned int>(payload->format));
 
-		ServiceCommand store_command{};
+		/* send command to storage service to store the captured frame */
+		store_command = {};
 		store_command.command_id = static_cast<uint32_t>(ServiceCommandId::StoreCapture);
-		store_command.param = static_cast<uint32_t>(payload->frame_handle);
-		store_command.data_ptr = payload->data_ptr;
-		store_command.data_len = payload->data_len;
-		store_command.width = payload->width;
-		store_command.height = payload->height;
-		store_command.format = payload->format;
-
-		const uintptr_t frame_handle = payload->frame_handle;
-		std::free(payload);
+		store_command.data_ptr = event.data_ptr; // pointer to frame payload, ownership will be transferred to storage service
+		
+		/* fetch frame handle from payload */
+		frame_handle = payload->frame_handle;
 
 		if (!sendCommand(ComponentId::StorageService, store_command, 0)) {
 			ESP_LOGW(TAG, "Failed to send StoreCapture command to storage service");
+			std::free(payload);
 			sendReleaseCaptureFrame(frame_handle);
 		} else {
 			ESP_LOGI(TAG, "Sent StoreCapture command to storage service");
@@ -252,11 +266,13 @@ void ServiceManager::handleStorageEvent(const ServiceEvent &event)
 bool ServiceManager::sendCommand(ComponentId component, const ServiceCommand &command, TickType_t timeout_ticks)
 {
 	const size_t index = componentToIndex(component);
+	QueueHandle_t *queue = nullptr;
+
 	if ((command_queues_ == nullptr) || (index >= command_queue_count_)) {
 		return false;
 	}
 
-	QueueHandle_t *queue = &command_queues_[index];
+	queue = &command_queues_[index];
 	if (*queue == nullptr) {
 		return false;
 	}

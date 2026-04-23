@@ -59,12 +59,12 @@ static bool ensureStorageMounted()
 	return true;
 }
 
-static bool writeFrameToStorage(const ServiceCommand &command)
+static bool writeFrameToStorage(const CaptureFramePayload &payload)
 {
-	if (command.data_ptr == 0U) {
+	if (payload.data_ptr == 0U) {
 		ESP_LOGE(TAG, "Invalid StoreCapture payload: ptr=%p len=%u",
-			reinterpret_cast<void *>(command.data_ptr),
-			static_cast<unsigned int>(command.data_len));
+			reinterpret_cast<void *>(payload.data_ptr),
+			static_cast<unsigned int>(payload.data_len));
 		return false;
 	}
 
@@ -91,8 +91,8 @@ static bool writeFrameToStorage(const ServiceCommand &command)
 		return false;
 	}
 
-	const uint8_t *frame_buf = reinterpret_cast<const uint8_t *>(command.data_ptr);
-	const size_t bytes_to_write = static_cast<size_t>(command.data_len);
+	const uint8_t *frame_buf = reinterpret_cast<const uint8_t *>(payload.data_ptr);
+	const size_t bytes_to_write = static_cast<size_t>(payload.data_len);
 	const size_t bytes_written = std::fwrite(frame_buf, 1, bytes_to_write, file);
 	std::fclose(file);
 
@@ -106,17 +106,17 @@ static bool writeFrameToStorage(const ServiceCommand &command)
 	ESP_LOGI(TAG,
 		"Stored frame to %s (len=%u width=%u height=%u format=%u)",
 		file_path,
-		static_cast<unsigned int>(command.data_len),
-		static_cast<unsigned int>(command.width),
-		static_cast<unsigned int>(command.height),
-		static_cast<unsigned int>(command.format));
+		static_cast<unsigned int>(payload.data_len),
+		static_cast<unsigned int>(payload.width),
+		static_cast<unsigned int>(payload.height),
+		static_cast<unsigned int>(payload.format));
 	return true;
 }
 
 static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
 {
 	ServiceEvent event{};
-	event.origin = EventOrigin::Component;
+	event.origin = EventOrigin::StorageService;
 	event.event_id = static_cast<uint32_t>(event_id);
 	event.data_ptr = data_ptr;
 	return event;
@@ -203,6 +203,9 @@ void StorageService::runTask()
 	ESP_LOGI(TAG, "Storage service task started");
 
 	ServiceCommand command{};
+	CaptureFramePayload *payload = nullptr;
+	uintptr_t frame_handle = 0U;
+	bool write_ok = false;
 	while (true) {
 		if (!waitForCommand(&command, portMAX_DELAY)) {
 			continue;
@@ -211,12 +214,22 @@ void StorageService::runTask()
 		const auto cmd_id = static_cast<ServiceCommandId>(command.command_id);
 		switch (cmd_id) {
 		case ServiceCommandId::StoreCapture:
+			payload = reinterpret_cast<CaptureFramePayload *>(command.data_ptr);
+			if (payload == nullptr) {
+				ESP_LOGE(TAG, "StoreCapture command received with null payload");
+				break;
+			}
+
 			ESP_LOGI(TAG, "StoreCapture command received, frame_len=%u",
-				static_cast<unsigned int>(command.data_len));
-			if (writeFrameToStorage(command)) {
-				(void)postEvent(makeEvent(ServiceEventId::StorageWriteDone, command.param), 0);
+				static_cast<unsigned int>(payload->data_len));
+			frame_handle = payload->frame_handle;
+			write_ok = writeFrameToStorage(*payload);
+			std::free(payload);
+
+			if (write_ok) {
+				(void)postEvent(makeEvent(ServiceEventId::StorageWriteDone, frame_handle), 0);
 			} else {
-				(void)postEvent(makeEvent(ServiceEventId::StorageError, command.param), 0);
+				(void)postEvent(makeEvent(ServiceEventId::StorageError, frame_handle), 0);
 			}
 			break;
 
