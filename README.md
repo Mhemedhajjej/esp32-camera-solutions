@@ -56,11 +56,16 @@ sequenceDiagram
 The current runtime flow is:
 
 1. Application creates shared queues in [main/Application.cpp](main/Application.cpp).
-2. Application initializes ServiceManager and PowerService with queue pointers.
-3. PowerService starts a FreeRTOS task and reports startup power reason as an event.
-4. ServiceManager starts a FreeRTOS task and consumes events.
-5. If ServiceManager receives no events for a configured idle timeout, it sends an EnterSleep command to PowerService.
-6. PowerService receives EnterSleep, configures wakeup sources, then enters deep sleep.
+2. Application initializes ServiceManager, PowerService, CameraService, and StorageService with queue pointers.
+3. PowerService reports startup wakeup/reset reason as an event.
+4. ServiceManager consumes shared events and dispatches commands by source component and policy.
+5. Wakeup-trigger events can produce CaptureFrame commands to CameraService.
+6. CameraService captures a frame and posts a frame-ready event with payload pointer.
+7. ServiceManager forwards StoreCapture command to StorageService.
+8. StorageService writes capture to SD card, then reports StorageWriteDone or StorageError.
+9. ServiceManager sends ReleaseCaptureFrame back to CameraService.
+10. If ServiceManager receives no events for a configured idle timeout, it sends EnterSleep to PowerService.
+11. PowerService configures wakeup sources and enters deep sleep.
 
 ## Components
 
@@ -78,6 +83,7 @@ Responsibilities:
 - Waits for events from shared event queue.
 - Sends commands to component command queues.
 - Triggers deep-sleep command after idle timeout.
+- Routes events using event source (`EventOrigin`) mapped to component ids.
 
 Config:
 
@@ -130,6 +136,26 @@ Queue message types are defined in [components/service_manager/include/service_m
 - ServiceCommand
 - ServiceEventId
 - ServiceCommandId
+
+Current queue contract:
+
+- `ServiceEvent` carries `origin`, `event_id`, and `data_ptr`.
+- `EventOrigin` is aligned with component identifiers (`PowerService`, `CameraService`, `StorageService`, plus `Hardware` for extensibility).
+- `ServiceCommand` carries `command_id` and `data_ptr` only.
+- Service-specific command payloads are passed through `data_ptr` as typed structures (for example `CaptureFramePayload`).
+
+## Component Dependencies
+
+Build-time dependencies are declared in each component CMake file:
+
+- [components/service_manager/CMakeLists.txt](components/service_manager/CMakeLists.txt): no extra `REQUIRES`
+- [components/power_service/CMakeLists.txt](components/power_service/CMakeLists.txt): `REQUIRES service_manager`, `PRIV_REQUIRES esp_driver_gpio`
+- [components/camera_service/CMakeLists.txt](components/camera_service/CMakeLists.txt): `REQUIRES service_manager esp32-camera`, `PRIV_REQUIRES esp_psram`
+- [components/storage_service/CMakeLists.txt](components/storage_service/CMakeLists.txt): `REQUIRES service_manager fatfs sdmmc esp_timer`
+
+Managed component dependency:
+
+- [components/camera_service/idf_component.yml](components/camera_service/idf_component.yml): `espressif/esp32-camera`
 
 ## Build, Flash, Monitor
 
@@ -207,6 +233,19 @@ gh run view <run-id> --log
 |   |-- Application.cpp
 |   `-- CMakeLists.txt
 |-- components/
+|   |-- camera_service/
+|   |   |-- include/
+|   |   |   `-- camera_service.h
+|   |   |-- src/
+|   |   |   `-- camera_service.cpp
+|   |   |-- CMakeLists.txt
+|   |   `-- idf_component.yml
+|   |-- storage_service/
+|   |   |-- include/
+|   |   |   `-- storage_service.h
+|   |   |-- src/
+|   |   |   `-- storage_service.cpp
+|   |   `-- CMakeLists.txt
 |   |-- service_manager/
 |   |   |-- include/
 |   |   |   `-- service_manager.h
