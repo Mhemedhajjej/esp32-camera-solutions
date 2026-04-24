@@ -58,7 +58,7 @@ jobs:
           name: esp32-camera-solutions-build
           path: release-assets
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         uses: ncipollo/release-action@v1
         with:
           artifacts: |
@@ -67,5 +67,7 @@ jobs:
             release-assets/bootloader/bootloader.bin
             release-assets/partition_table/partition-table.bin
             release-assets/flasher_args.json
+          allowUpdates: true
+          replaceArtifacts: true
           generateReleaseNotes: true
           token: ${{ secrets.GITHUB_TOKEN }}
