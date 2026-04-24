@@ -11,6 +11,37 @@ namespace esp32_camera_solutions {
 
 static const char *TAG = "power_service";
 
+namespace {
+
+static esp_sleep_wakeup_cause_t wakeupCauseFromBitmap(uint32_t wakeup_causes)
+{
+	if (wakeup_causes == 0U) {
+		return ESP_SLEEP_WAKEUP_UNDEFINED;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT0)) != 0U) {
+		return ESP_SLEEP_WAKEUP_EXT0;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT1)) != 0U) {
+		return ESP_SLEEP_WAKEUP_EXT1;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_TIMER)) != 0U) {
+		return ESP_SLEEP_WAKEUP_TIMER;
+	}
+
+	for (uint32_t cause = 1U; cause <= static_cast<uint32_t>(ESP_SLEEP_WAKEUP_VBAT_UNDER_VOLT); ++cause) {
+		if ((wakeup_causes & (1UL << cause)) != 0U) {
+			return static_cast<esp_sleep_wakeup_cause_t>(cause);
+		}
+	}
+
+	return ESP_SLEEP_WAKEUP_UNDEFINED;
+}
+
+} // namespace
+
 PowerService::PowerService() = default;
 
 PowerService &PowerService::Get()
@@ -95,15 +126,20 @@ void PowerService::taskEntry(void *arg)
 
 void PowerService::runTask()
 {
+	uint32_t wakeup_causes = 0U;
 	/* Report startup reason once when task starts. */
-	const esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+	wakeup_causes = esp_sleep_get_wakeup_causes();
+	const esp_sleep_wakeup_cause_t wakeup_cause = wakeupCauseFromBitmap(wakeup_causes);
 	if (wakeup_cause != ESP_SLEEP_WAKEUP_UNDEFINED) {
 		ServiceEvent wakeup_event{};
 		wakeup_event.origin = EventOrigin::PowerService;
 		wakeup_event.event_id = static_cast<uint32_t>(ServiceEventId::PowerWakeupCause);
 		wakeup_event.data_ptr = static_cast<uintptr_t>(wakeup_cause);
 		(void)postEvent(wakeup_event, 0);
-		ESP_LOGI(TAG, "Reported wakeup cause=%u", static_cast<unsigned int>(wakeup_cause));
+		ESP_LOGI(TAG,
+			"Reported wakeup cause=%u bitmap=0x%08x",
+			static_cast<unsigned int>(wakeup_cause),
+			static_cast<unsigned int>(wakeup_causes));
 	} else {
 		const esp_reset_reason_t reset_reason = esp_reset_reason();
 		ServiceEvent reset_event{};
