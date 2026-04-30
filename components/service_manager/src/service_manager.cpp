@@ -127,6 +127,10 @@ void ServiceManager::runTask()
 			handleCameraEvent(event);
 			break;
 
+		case ComponentId::WifiService:
+			handleWifiEvent(event);
+			break;
+
 		case ComponentId::StorageService:
 			handleStorageEvent(event);
 			break;
@@ -197,7 +201,7 @@ void ServiceManager::handlePowerEvent(const ServiceEvent &event)
 void ServiceManager::handleCameraEvent(const ServiceEvent &event)
 {
 	CaptureFramePayload *payload = nullptr;
-	ServiceCommand store_command{};
+	ServiceCommand upload_command{};
 	uintptr_t frame_handle = 0U;
 
 	switch (static_cast<ServiceEventId>(event.event_id)) {
@@ -215,20 +219,20 @@ void ServiceManager::handleCameraEvent(const ServiceEvent &event)
 			static_cast<unsigned int>(payload->height),
 			static_cast<unsigned int>(payload->format));
 
-		/* send command to storage service to store the captured frame */
-		store_command = {};
-		store_command.command_id = static_cast<uint32_t>(ServiceCommandId::StoreCapture);
-		store_command.data_ptr = event.data_ptr; // pointer to frame payload, ownership will be transferred to storage service
+		/* send command to wifi service to upload the captured frame */
+		upload_command = {};
+		upload_command.command_id = static_cast<uint32_t>(ServiceCommandId::UploadCapture);
+		upload_command.data_ptr = event.data_ptr;
 		
 		/* fetch frame handle from payload */
 		frame_handle = payload->frame_handle;
 
-		if (!sendCommand(ComponentId::StorageService, store_command, 0)) {
-			ESP_LOGW(TAG, "Failed to send StoreCapture command to storage service");
+		if (!sendCommand(ComponentId::WifiService, upload_command, 0)) {
+			ESP_LOGW(TAG, "Failed to send UploadCapture command to wifi service");
 			std::free(payload);
 			sendReleaseCaptureFrame(frame_handle);
 		} else {
-			ESP_LOGI(TAG, "Sent StoreCapture command to storage service");
+			ESP_LOGI(TAG, "Sent UploadCapture command to wifi service");
 		}
 		break;
 	}
@@ -236,6 +240,34 @@ void ServiceManager::handleCameraEvent(const ServiceEvent &event)
 	case ServiceEventId::CameraError:
 		ESP_LOGW(TAG, "Camera error event received: err=%u",
 			static_cast<unsigned int>(event.data_ptr));
+		break;
+
+	default:
+		break;
+	}
+}
+
+void ServiceManager::handleWifiEvent(const ServiceEvent &event)
+{
+	switch (static_cast<ServiceEventId>(event.event_id)) {
+	case ServiceEventId::WifiConnected:
+		ESP_LOGI(TAG, "WiFi connected");
+		break;
+
+	case ServiceEventId::WifiUploadDone:
+		ESP_LOGI(TAG, "WiFi upload done: handle=%u",
+			static_cast<unsigned int>(event.data_ptr));
+		sendReleaseCaptureFrame(event.data_ptr);
+		break;
+
+	case ServiceEventId::WifiUploadError:
+		ESP_LOGW(TAG, "WiFi upload error: handle=%u",
+			static_cast<unsigned int>(event.data_ptr));
+		sendReleaseCaptureFrame(event.data_ptr);
+		break;
+
+	case ServiceEventId::WifiError:
+		ESP_LOGW(TAG, "WiFi service reported an error");
 		break;
 
 	default:

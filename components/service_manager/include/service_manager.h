@@ -12,6 +12,7 @@ enum class ComponentId : uint8_t {
 	Hardware = 0,
 	PowerService,
 	CameraService,
+	WifiService,
 	StorageService,
 	Count,
 };
@@ -21,6 +22,7 @@ enum class EventOrigin : uint8_t {
 	Hardware = static_cast<uint8_t>(ComponentId::Hardware),
 	PowerService = static_cast<uint8_t>(ComponentId::PowerService),
 	CameraService = static_cast<uint8_t>(ComponentId::CameraService),
+	WifiService = static_cast<uint8_t>(ComponentId::WifiService),
 	StorageService = static_cast<uint8_t>(ComponentId::StorageService),
 };
 
@@ -45,6 +47,10 @@ enum class ServiceEventId : uint32_t {
 	PowerResetReason,
 	CameraFrameReady,
 	CameraError,
+	WifiConnected,
+	WifiUploadDone,
+	WifiUploadError,
+	WifiError,
 	StorageWriteDone,
 	StorageError,
 };
@@ -60,6 +66,7 @@ enum class ServiceCommandId : uint32_t {
 	CaptureFrame,
 	StartStream,
 	StopStream,
+	UploadCapture,
 	StoreCapture,
 	ReleaseCaptureFrame,
 };
@@ -83,6 +90,7 @@ private:
 
 	void handlePowerEvent(const ServiceEvent &event);
 	void handleCameraEvent(const ServiceEvent &event);
+	void handleWifiEvent(const ServiceEvent &event);
 	void handleStorageEvent(const ServiceEvent &event);
 	void sendReleaseCaptureFrame(uintptr_t frame_handle);
 

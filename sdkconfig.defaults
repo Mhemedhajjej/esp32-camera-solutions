@@ -1,1 +1,5 @@
 # ESP32 Camera Solutions - Default configuration for v0.1
+
+# Ensure app image has enough space for WiFi + HTTP upload features
+# CONFIG_PARTITION_TABLE_SINGLE_APP is not set
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y

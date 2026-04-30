@@ -1,0 +1,46 @@
+menu "WiFi Service"
+
+config WIFI_SERVICE_SSID
+	string "WiFi SSID"
+	default ""
+	help
+		SSID of the local WiFi network to join.
+
+config WIFI_SERVICE_PASSWORD
+	string "WiFi password"
+	default ""
+	help
+		Password of the local WiFi network to join.
+
+config WIFI_SERVICE_MAX_RETRY
+	int "WiFi max reconnect retries"
+	range 1 20
+	default 8
+	help
+		Maximum reconnect attempts before a connect attempt is reported as failed.
+
+config WIFI_SERVICE_CONNECT_TIMEOUT_MS
+	int "WiFi connect timeout (ms)"
+	range 1000 120000
+	default 20000
+	help
+		How long to wait for STA connection and DHCP address.
+
+config WIFI_SERVICE_UPLOAD_URL
+	string "HTTP upload URL"
+	default "http://192.168.1.10:8080/upload"
+	help
+		Target endpoint used to upload JPEG captures.
+		Examples:
+		- http://raspberrypi.local:8080/upload
+		- http://beaglebone.local:8080/upload
+		- http://192.168.1.100:5000/upload
+
+config WIFI_SERVICE_HTTP_TIMEOUT_MS
+	int "HTTP timeout (ms)"
+	range 1000 120000
+	default 15000
+	help
+		Timeout used by the HTTP client while uploading a frame.
+
+endmenu
