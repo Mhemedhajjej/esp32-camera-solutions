@@ -278,7 +278,7 @@ bool WifiService::uploadFrame(const CaptureFramePayload &payload)
 	}
 
 	ESP_LOGI(TAG,
-		"Uploaded frame to %s (len=%u width=%u height=%u status=%d)",
+		"Sent frame to receiver %s (len=%u width=%u height=%u status=%d)",
 		CONFIG_WIFI_SERVICE_UPLOAD_URL,
 		static_cast<unsigned int>(payload.data_len),
 		static_cast<unsigned int>(payload.width),

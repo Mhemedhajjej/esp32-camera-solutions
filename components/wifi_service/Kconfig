@@ -27,10 +27,12 @@ config WIFI_SERVICE_CONNECT_TIMEOUT_MS
 		How long to wait for STA connection and DHCP address.
 
 config WIFI_SERVICE_UPLOAD_URL
-	string "HTTP upload URL"
+	string "Receiver HTTP URL"
 	default "http://192.168.1.10:8080/upload"
 	help
-		Target endpoint used to upload JPEG captures.
+		LAN receiver endpoint used to send JPEG captures.
+		Typically this points to a local PC/Raspberry Pi/BeagleBone service
+		that stores files on local disk.
 		Examples:
 		- http://raspberrypi.local:8080/upload
 		- http://beaglebone.local:8080/upload
