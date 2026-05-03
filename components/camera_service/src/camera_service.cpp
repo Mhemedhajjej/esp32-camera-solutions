@@ -13,59 +13,8 @@ static const char *TAG = "camera_service";
 
 namespace {
 
-static camera_config_t buildCameraConfig()
-{
-	camera_config_t config{};
-	const bool psram_ready =
-#if CONFIG_SPIRAM
-		true;
-#else
-		false;
-#endif
-
-	config.ledc_channel = LEDC_CHANNEL_0;
-	config.ledc_timer = LEDC_TIMER_0;
-	config.pin_d0 = CONFIG_CAMERA_SERVICE_PIN_D0;
-	config.pin_d1 = CONFIG_CAMERA_SERVICE_PIN_D1;
-	config.pin_d2 = CONFIG_CAMERA_SERVICE_PIN_D2;
-	config.pin_d3 = CONFIG_CAMERA_SERVICE_PIN_D3;
-	config.pin_d4 = CONFIG_CAMERA_SERVICE_PIN_D4;
-	config.pin_d5 = CONFIG_CAMERA_SERVICE_PIN_D5;
-	config.pin_d6 = CONFIG_CAMERA_SERVICE_PIN_D6;
-	config.pin_d7 = CONFIG_CAMERA_SERVICE_PIN_D7;
-	config.pin_xclk = CONFIG_CAMERA_SERVICE_PIN_XCLK;
-	config.pin_pclk = CONFIG_CAMERA_SERVICE_PIN_PCLK;
-	config.pin_vsync = CONFIG_CAMERA_SERVICE_PIN_VSYNC;
-	config.pin_href = CONFIG_CAMERA_SERVICE_PIN_HREF;
-	config.pin_sccb_sda = CONFIG_CAMERA_SERVICE_PIN_SIOD;
-	config.pin_sccb_scl = CONFIG_CAMERA_SERVICE_PIN_SIOC;
-	config.pin_pwdn = CONFIG_CAMERA_SERVICE_PIN_PWDN;
-	config.pin_reset = CONFIG_CAMERA_SERVICE_PIN_RESET;
-	config.xclk_freq_hz = CONFIG_CAMERA_SERVICE_XCLK_FREQ_HZ;
-	config.pixel_format = PIXFORMAT_JPEG;
-	config.frame_size = psram_ready ? FRAMESIZE_VGA : FRAMESIZE_QVGA;
-	config.jpeg_quality = CONFIG_CAMERA_SERVICE_JPEG_QUALITY;
-	config.fb_count = psram_ready
-		? CONFIG_CAMERA_SERVICE_FRAME_BUF_COUNT
-		: 1;
-	config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
-	config.fb_location = psram_ready ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
-
-	if (!psram_ready) {
-		ESP_LOGW(TAG,
-			"PSRAM is not initialized, using reduced camera config: frame_size=QVGA fb_count=1 in DRAM");
-	}
-	return config;
-}
-
-static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
-{
-	ServiceEvent event{};
-	event.origin = EventOrigin::CameraService;
-	event.event_id = static_cast<uint32_t>(event_id);
-	event.data_ptr = data_ptr;
-	return event;
-}
+static camera_config_t buildCameraConfig();
+static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr);
 
 } // namespace
 
@@ -253,5 +202,63 @@ void CameraService::runTask()
 		}
 	}
 }
+
+namespace {
+
+static camera_config_t buildCameraConfig()
+{
+	camera_config_t config{};
+	const bool psram_ready =
+#if CONFIG_SPIRAM
+		true;
+#else
+		false;
+#endif
+
+	config.ledc_channel = LEDC_CHANNEL_0;
+	config.ledc_timer = LEDC_TIMER_0;
+	config.pin_d0 = CONFIG_CAMERA_SERVICE_PIN_D0;
+	config.pin_d1 = CONFIG_CAMERA_SERVICE_PIN_D1;
+	config.pin_d2 = CONFIG_CAMERA_SERVICE_PIN_D2;
+	config.pin_d3 = CONFIG_CAMERA_SERVICE_PIN_D3;
+	config.pin_d4 = CONFIG_CAMERA_SERVICE_PIN_D4;
+	config.pin_d5 = CONFIG_CAMERA_SERVICE_PIN_D5;
+	config.pin_d6 = CONFIG_CAMERA_SERVICE_PIN_D6;
+	config.pin_d7 = CONFIG_CAMERA_SERVICE_PIN_D7;
+	config.pin_xclk = CONFIG_CAMERA_SERVICE_PIN_XCLK;
+	config.pin_pclk = CONFIG_CAMERA_SERVICE_PIN_PCLK;
+	config.pin_vsync = CONFIG_CAMERA_SERVICE_PIN_VSYNC;
+	config.pin_href = CONFIG_CAMERA_SERVICE_PIN_HREF;
+	config.pin_sccb_sda = CONFIG_CAMERA_SERVICE_PIN_SIOD;
+	config.pin_sccb_scl = CONFIG_CAMERA_SERVICE_PIN_SIOC;
+	config.pin_pwdn = CONFIG_CAMERA_SERVICE_PIN_PWDN;
+	config.pin_reset = CONFIG_CAMERA_SERVICE_PIN_RESET;
+	config.xclk_freq_hz = CONFIG_CAMERA_SERVICE_XCLK_FREQ_HZ;
+	config.pixel_format = PIXFORMAT_JPEG;
+	config.frame_size = psram_ready ? FRAMESIZE_VGA : FRAMESIZE_QVGA;
+	config.jpeg_quality = CONFIG_CAMERA_SERVICE_JPEG_QUALITY;
+	config.fb_count = psram_ready
+		? CONFIG_CAMERA_SERVICE_FRAME_BUF_COUNT
+		: 1;
+	config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+	config.fb_location = psram_ready ? CAMERA_FB_IN_PSRAM : CAMERA_FB_IN_DRAM;
+
+	if (!psram_ready) {
+		ESP_LOGW(TAG,
+			"PSRAM is not initialized, using reduced camera config: frame_size=QVGA fb_count=1 in DRAM");
+	}
+	return config;
+}
+
+static ServiceEvent makeEvent(ServiceEventId event_id, uintptr_t data_ptr)
+{
+	ServiceEvent event{};
+	event.origin = EventOrigin::CameraService;
+	event.event_id = static_cast<uint32_t>(event_id);
+	event.data_ptr = data_ptr;
+	return event;
+}
+
+} // namespace
 
 } // namespace esp32_camera_solutions
