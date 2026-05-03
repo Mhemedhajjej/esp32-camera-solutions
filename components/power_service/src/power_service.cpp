@@ -13,32 +13,7 @@ static const char *TAG = "power_service";
 
 namespace {
 
-static esp_sleep_wakeup_cause_t wakeupCauseFromBitmap(uint32_t wakeup_causes)
-{
-	if (wakeup_causes == 0U) {
-		return ESP_SLEEP_WAKEUP_UNDEFINED;
-	}
-
-	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT0)) != 0U) {
-		return ESP_SLEEP_WAKEUP_EXT0;
-	}
-
-	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT1)) != 0U) {
-		return ESP_SLEEP_WAKEUP_EXT1;
-	}
-
-	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_TIMER)) != 0U) {
-		return ESP_SLEEP_WAKEUP_TIMER;
-	}
-
-	for (uint32_t cause = 1U; cause <= static_cast<uint32_t>(ESP_SLEEP_WAKEUP_VBAT_UNDER_VOLT); ++cause) {
-		if ((wakeup_causes & (1UL << cause)) != 0U) {
-			return static_cast<esp_sleep_wakeup_cause_t>(cause);
-		}
-	}
-
-	return ESP_SLEEP_WAKEUP_UNDEFINED;
-}
+static esp_sleep_wakeup_cause_t wakeupCauseFromBitmap(uint32_t wakeup_causes);
 
 } // namespace
 
@@ -190,5 +165,36 @@ QueueHandle_t *PowerService::getCommandQueue() const
 {
 	return command_queue_;
 }
+
+namespace {
+
+static esp_sleep_wakeup_cause_t wakeupCauseFromBitmap(uint32_t wakeup_causes)
+{
+	if (wakeup_causes == 0U) {
+		return ESP_SLEEP_WAKEUP_UNDEFINED;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT0)) != 0U) {
+		return ESP_SLEEP_WAKEUP_EXT0;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_EXT1)) != 0U) {
+		return ESP_SLEEP_WAKEUP_EXT1;
+	}
+
+	if ((wakeup_causes & (1UL << ESP_SLEEP_WAKEUP_TIMER)) != 0U) {
+		return ESP_SLEEP_WAKEUP_TIMER;
+	}
+
+	for (uint32_t cause = 1U; cause <= static_cast<uint32_t>(ESP_SLEEP_WAKEUP_VBAT_UNDER_VOLT); ++cause) {
+		if ((wakeup_causes & (1UL << cause)) != 0U) {
+			return static_cast<esp_sleep_wakeup_cause_t>(cause);
+		}
+	}
+
+	return ESP_SLEEP_WAKEUP_UNDEFINED;
+}
+
+} // namespace
 
 } // namespace esp32_camera_solutions
